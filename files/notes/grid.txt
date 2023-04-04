@@ -1,0 +1,52 @@
+//TEST WINDOW
+			if (test_window) {
+				ImGui::Begin("Test Window", &test_window);
+
+				Image font_mat;
+				font_mat.readImageIntoPixelData("files/images/font/font_mat.png");
+				Image canvas(100, 87);
+				Image brush_T = font_mat.getSubselectionOfImage(778, 1, 821, 88);
+				Image brush_e = font_mat.getSubselectionOfImage(108, 91, 131, 178);
+
+				canvas.insertImage(brush_T, 0, 0, true);
+				canvas.insertImage(brush_e, 43, 0, true);
+
+				static ImGuiTableFlags flags1 = ImGuiTableFlags_Borders | ImGuiTableFlags_NoHostExtendX | ImGuiTableFlags_RowBg;
+				int rows = canvas.height;
+				int columns = canvas.width;
+
+				if (ImGui::BeginTable("test_table", columns, flags1))
+				{
+					for (int i = 0; i < rows; i++) {
+						ImGui::TableSetupColumn(unsignedIntToDecString(i, 4).c_str(), ImGuiTableColumnFlags_WidthFixed, 8.0f);
+					}
+
+					int count = 0;
+
+					//ImGui::TableHeadersRow();
+					for (int row = 0; row < rows; row++)
+					{
+						ImGui::TableNextRow();
+						for (int column = 0; column < columns; column++)
+						{
+							ImGui::TableSetColumnIndex(column);
+							//ImGui::Text("%d,%d", column, row);
+							//ImGui::SetWindowFontScale(1.8f);
+							ImGui::Text(" ");
+
+							ImU32 cell_bg_color = ImGui::GetColorU32(ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+							if (count % 2 == 0)
+								cell_bg_color = ImGui::GetColorU32(ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
+							else
+								cell_bg_color = ImGui::GetColorU32(ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+							ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, cell_bg_color);
+
+							count++;
+
+						}
+					}
+					ImGui::EndTable();
+				}
+
+				ImGui::End();
+			}

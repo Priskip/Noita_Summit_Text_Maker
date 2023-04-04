@@ -1,0 +1,480 @@
+//Main Window
+		{
+			ImGui::Begin("Main");
+
+			if (debug_windows) {
+				ImGui::Checkbox("Demo Window", &show_demo_window);
+				ImGui::Checkbox("Test Window", &test_window);
+			}
+
+			ImGui::Text("Enter a streamer's name to add them to the list or read the contents of streamers.txt");
+			ImGui::Text("Allowed Characters: \"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890 +-()/?,.\"\'_\"");
+			ImGui::InputText("Streamer Name", streamer_name, 256, ImGuiInputTextFlags_CallbackCharFilter, TextFilters::FilterImGuiLetters);
+
+			if (ImGui::Button("Add to list")) {
+				int table_pos = getVectorPosition(streamer_list, streamer_name); //returns -1 if element does not exist in vector 
+				if (table_pos == -1) {
+					streamer_list.push_back(streamer_name); //streamer is not in list, add it to list 
+				}
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Read streamers.txt")) {
+				//Open File
+				std::string line;
+				std::ifstream streamers_file;
+				streamers_file.open("files/streamers.txt");
+
+				//Read stuff from file.
+				if (streamers_file.is_open()) {
+					//Parse File
+					while (streamers_file) {
+						getline(streamers_file, line); //read next line
+
+						bool allowed = false;
+						for (int i = 0; i < line.size(); i++) {
+							for (int j = 0; j < character_list.size(); j++) {
+								if (line[i] == character_list[j]) {
+									allowed = true;
+									break;
+								}
+							}
+						}
+
+
+						int table_pos = getVectorPosition(streamer_list, line); //returns -1 if element does not exist in vector
+						if (table_pos == -1) {
+							streamer_list.push_back(line); //streamer is not in list, add it to list
+						}
+					}
+				}
+				else
+				{
+					std::cout << "Could not open streamers.txt" << std::endl;
+				}
+
+				//Close file
+				streamers_file.close();
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Clear list")) {
+				streamer_list.clear();
+			}
+
+			ImGui::SeparatorText("Streamer List");
+			if (ImGui::TreeNode("Streamers"))
+			{
+				ImGui::Text("Click streamer name to remove them from list.");
+				if (streamer_list.size() > 0) {
+					for (int i = 0; i < streamer_list.size(); i++) {
+						if (ImGui::Button(streamer_list[i].c_str())) {
+							streamer_list.erase(streamer_list.begin() + i);
+						}
+						if ((i + 1) % 5 != 0 && i != streamer_list.size() - 1) {
+							ImGui::SameLine();
+						}
+
+					}
+				}
+
+				ImGui::TreePop();
+			}
+
+			ImGui::SeparatorText("Image Generation");
+			ImGui::Text("Select which types of images to generate.");
+			ImGui::Checkbox("Just Name", &just_name);
+			ImGui::SameLine();
+			ImGui::Checkbox("2 Player Left", &two_player_left);
+			ImGui::SameLine();
+			ImGui::Checkbox("2 Player Right", &two_player_right);
+
+			ImGui::Text("");
+			ImGui::Text("Set the X and Y positions to have names placed into a 1920x1080 png.");
+			ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+			ImGui::InputInt("2 Player Left X pos", &two_player_left_image_pos_x);
+			ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+			ImGui::InputInt("2 Player Left Y pos", &two_player_left_image_pos_y);
+
+			ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+			ImGui::InputInt("2 Player Right X pos", &two_player_right_image_pos_x);
+			ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+			ImGui::InputInt("2 Player Right Y pos", &two_player_right_image_pos_y);
+			if (ImGui::Button("Reload config.xml values")) {
+				tinyxml2::XMLDocument config;
+				config.LoadFile("files/config.xml");
+				tinyxml2::XMLElement* pRootElement = config.RootElement();
+
+				//std::cout << pRootElement->Name() << std::endl;
+				for (const tinyxml2::XMLAttribute* attribute = pRootElement->FirstAttribute(); attribute != nullptr; attribute = attribute->Next()) {
+					std::string parameter = attribute->Name();
+
+					if (parameter == "two_player_left_x") {
+						two_player_left_image_pos_x = decStringToUnsignedInt(attribute->Value());
+					}
+					if (parameter == "two_player_left_y") {
+						two_player_left_image_pos_y = decStringToUnsignedInt(attribute->Value());
+					}
+					if (parameter == "two_player_right_x") {
+						two_player_right_image_pos_x = decStringToUnsignedInt(attribute->Value());
+					}
+					if (parameter == "two_player_right_y") {
+						two_player_right_image_pos_y = decStringToUnsignedInt(attribute->Value());
+					}
+				}
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Save values to config.xml")) {
+				tinyxml2::XMLDocument config;
+				config.LoadFile("files/config.xml");
+				tinyxml2::XMLElement* pRootElement = config.RootElement();
+				pRootElement->SetAttribute("two_player_left_x", two_player_left_image_pos_x);
+				pRootElement->SetAttribute("two_player_left_y", two_player_left_image_pos_y);
+				pRootElement->SetAttribute("two_player_right_x", two_player_right_image_pos_x);
+				pRootElement->SetAttribute("two_player_right_y", two_player_right_image_pos_y);
+				config.SaveFile("files/config.xml");
+			}
+
+			ImGui::Text("");
+			if (ImGui::Button("Generate Images")) {
+				//read font mat information
+				Image font_mat;
+				font_mat.readImageIntoPixelData("files/images/font/font_mat.png");
+
+				//Need to know how many characters per row in the font file
+				int chars_per_row = 26;
+
+				//Test name to use (integrate this with streamer names list later)
+				std::string test_name = "Tea Time";
+
+				//Generate Cavas Image
+				//capital M is our thickest boi here at 64 pixels across.
+				//so for our canvas, we'll make it 64 * "number of characters in the name" wide, then trim at the end
+				Image canvas(64 * test_name.length(), 87);
+
+				//testing - turn canvas green
+				//for (int i = 0; i < (canvas.pixel_data.size() / 4); i++) {
+				//	canvas.pixel_data[4 * i + 0] = 0; //r
+				//	canvas.pixel_data[4 * i + 1] = 69; //g
+				//	canvas.pixel_data[4 * i + 2] = 0; //b
+				//	canvas.pixel_data[4 * i + 3] = 255; //a
+				//}
+
+				std::vector<int> brush_positions;
+				brush_positions.push_back(0); //for 0 indexing
+
+				for (int character_number = 0; character_number < test_name.length(); character_number++) {
+					//Get Character position in list.
+					int char_pos_in_allowed_character_list = -1;
+					for (int i = 0; i < character_list.length(); i++) {
+						if (character_list[i] == test_name[character_number]) {
+							char_pos_in_allowed_character_list = i;
+							break;
+						}
+					}
+
+					int char_row = floor(char_pos_in_allowed_character_list / chars_per_row);
+					int char_column = char_pos_in_allowed_character_list % chars_per_row; //Note to self, don't forget this is 0 indexed dummy
+
+					//In our font png files, our fonts are seperated by green (0,255,0,255) boxes.
+					//If I count the number of borders I pass, I can get the position of the bounding boxes.
+					//Store the boundary positions in a vector - Index of vector is the row of characters in the font png
+					std::vector<std::vector<int>> boundaries;
+					boundaries.resize(3);
+
+					for (int row = 0; row < 3; row++) {
+						for (int x = 0; x < font_mat.width; x++) {
+							font_mat.readRGBAatSpeicificPixel(x, 1 + 90 * row);
+							if (font_mat.compareRGBA(0, 255, 0, 255)) {
+								boundaries[row].push_back(x);
+							}
+						}
+					}
+
+					//Now we know our boundary positions, thus we can read where the letters are
+					int character_width = (boundaries[char_row][char_column + 1]) - (boundaries[char_row][char_column] + 1);
+					Image brush;
+					brush = font_mat.getSubselectionOfImage(boundaries[char_row][char_column] + 1, 1 + 90 * char_row, boundaries[char_row][char_column + 1], 88 + 90 * char_row);
+
+					//insert letter into image
+					if (character_number == 0) {
+						//If it's the first character, we just plop it into the image.
+						canvas.insertImage(brush, 0, 0, false);
+						brush_positions.push_back(character_width + 3);
+					}
+					else
+					{
+						//If it's not the first character, we insert into image and then smoosh it closer to the letter that came before it.
+						//Illustration of how this is checked is in the bottom corner of the font mat png
+						canvas.storePixelDataBackup(); //backup pixel data
+
+						//TODO - Write code to detect if the letters are too smooshed together
+						int splash_pos = 0;
+
+						//we now know where we should paint the brush
+						canvas.restorePixelData();
+						canvas.insertImage(brush, brush_positions[character_number] + splash_pos, 0, true);
+						brush_positions.push_back(brush_positions[character_number] + splash_pos + 3);
+					}
+				}
+				//write image to file
+				//canvas.cropImage(0, 0, brush_position, 87);
+				canvas.writePixelDataIntoImage("files/images/test_output.png");
+
+
+				for (int i : brush_positions) {
+					std::cout << i << " ";
+				}
+				std::cout << std::endl;
+
+				std::cout << "Done Generating Images" << std::endl;
+			}
+
+			ImGui::End();
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+			ImGui::SliderInt("scale", &preview_display_scale, 1, 10);
+			ImGui::InputText("Streamer Name", streamer_name, 256, ImGuiInputTextFlags_CallbackCharFilter, TextFilters::FilterImGuiLetters);
+
+			//Create Image
+			//Cast to string to use .length function
+			std::string test_name = streamer_name;
+
+			//clean canvas
+			canvas.zeroPixelData();
+			canvas.width = 64 * test_name.length();
+			canvas.height = 87;
+			canvas.resizePixelData();
+
+			//Variable to store positions where we splat our brush on the canvas
+			std::vector<int> brush_positions;
+			brush_positions.push_back(0); //for 0 indexing
+
+			for (int char_num = 0; char_num < test_name.length(); char_num++) {
+				//Get Character position in list.
+				int char_pos = -1;
+				for (int i = 0; i < character_list.length(); i++) {
+					if (character_list[i] == test_name[char_num]) {
+						char_pos = i;
+						break;
+					}
+				}
+				int chars_per_row = 26;
+				int char_row = floor(char_pos / chars_per_row);
+				int char_column = char_pos % chars_per_row;
+				int character_width = (boundaries[char_row][char_column + 1]) - (boundaries[char_row][char_column] + 1);
+
+				//insert letter into image
+				brush = font_mat.getSubselectionOfImage(
+					boundaries[char_row][char_column] + 1, 1 + 90 * char_row,
+					boundaries[char_row][char_column + 1], 88 + 90 * char_row
+				);
+				canvas.storePixelDataBackup();
+
+				if (char_num > 0) { //If character is not the first, we will smoosh it back
+					int splat_position = brush_positions[char_num];
+
+
+					//Find all red pixels in brush
+					std::vector<std::vector<int>> red_pixels;
+					std::vector<int> red_pixel_position(2, 0);
+					for (int y = 0; y < brush.height; y++) {
+						for (int x = 0; x < brush.width; x++) {
+							brush.readRGBAatSpeicificPixel(x, y);
+							if (brush.compareRGBA(255, 0, 0, 255)) {
+								red_pixel_position[0] = x;
+								red_pixel_position[1] = y;
+								red_pixels.push_back(red_pixel_position);
+							}
+						}
+					}
+
+					//For each red pixel found, see if there is a blue pixel immediately to it's left
+					for (int i = 0; i < red_pixels.size(); i++) {
+						int red_x_pos = splat_position + red_pixels[i][0];
+						int red_y_pos = red_pixels[i][1];
+
+
+					}
+
+				}
+
+
+
+				canvas.insertImage(brush, brush_positions[char_num], 0, false);
+				brush_positions.push_back(brush_positions[char_num] + character_width + 5);
+
+			}
+			//END Create Image
+
+			//Draw Image
+			ImDrawList* draw_list = ImGui::GetWindowDrawList();
+			static ImVec4 colf = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+			const ImVec2 p = ImGui::GetCursorScreenPos();
+			ImU32 color = ImColor(colf);
+			float x = p.x + 4.0f;
+			float y = p.y + 44.0f;
+
+			//Draw a white box around image preview
+			draw_list->AddRect(
+				ImVec2(x - 1, y - 1),
+				ImVec2(x + preview_display_scale * canvas.width + 1, y + preview_display_scale * canvas.height + 1),
+				color, 0.0f, ImDrawFlags_None, 1.0f);
+
+			//Draw canvas
+			for (int row = 0; row < canvas.height; row++) {
+				for (int column = 0; column < canvas.width; column++) {
+					canvas.readRGBAatSpeicificPixel(column, row);
+					color = ImColor(ImVec4((float)(canvas.rgba[0]) / 255, (float)(canvas.rgba[1]) / 255, (float)(canvas.rgba[2]) / 255, (float)(canvas.rgba[3]) / 255));
+
+					draw_list->AddRectFilled(
+						ImVec2(column * preview_display_scale + x, row * preview_display_scale + y),
+						ImVec2(column * preview_display_scale + x + preview_display_scale, row * preview_display_scale + y + preview_display_scale),
+						color); // Pixel (faster than AddLine)
+				}
+			}
+			//END Draw Image
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//Create Image
+			//Cast to string to use .length function
+			std::string test_name = streamer_name;
+
+			//clean canvas
+			canvas.zeroPixelData();
+			canvas.width = 64 * test_name.length();
+			canvas.height = 87;
+			canvas.resizePixelData();
+
+			//Variable to store positions where we splat our brush on the canvas
+			std::vector<int> brush_positions;
+			brush_positions.push_back(0); //for 0 indexing
+
+			for (int char_num = 0; char_num < test_name.length(); char_num++) {
+				//Get Character position in list.
+				int char_pos = -1;
+				for (int i = 0; i < character_list.length(); i++) {
+					if (character_list[i] == test_name[char_num]) {
+						char_pos = i;
+						break;
+					}
+				}
+				int chars_per_row = 26;
+				int char_row = floor(char_pos / chars_per_row);
+				int char_column = char_pos % chars_per_row;
+				int character_width = (boundaries[char_row][char_column + 1]) - (boundaries[char_row][char_column] + 1);
+
+				//insert letter into image
+				brush = font_mat.getSubselectionOfImage(
+					boundaries[char_row][char_column] + 1, 1 + 90 * char_row,
+					boundaries[char_row][char_column + 1], 88 + 90 * char_row
+				);
+				canvas.storePixelDataBackup();
+
+				if (char_num > 0) { //If character is not the first, we will smoosh it back
+					int splat_position = brush_positions[char_num] + splat_offset;
+
+					//Find all red pixels in brush
+					std::vector<std::vector<int>> red_pixels;
+					std::vector<int> red_pixel_position(2, 0);
+					for (int y = 0; y < brush.height; y++) {
+						for (int x = 0; x < brush.width; x++) {
+							brush.readRGBAatSpeicificPixel(x, y);
+							if (brush.compareRGBA(255, 0, 0, 255)) {
+								red_pixel_position[0] = x;
+								red_pixel_position[1] = y;
+								red_pixels.push_back(red_pixel_position);
+							}
+						}
+					}
+
+					//For each red pixel found, see if there is a blue pixel immediately to it's left
+					for (int i = 0; i < red_pixels.size(); i++) {
+						int red_x_pos = splat_position + red_pixels[i][0];
+						int red_y_pos = red_pixels[i][1];
+
+						for (int y_offset = -1; y_offset <= 1; y_offset++) {
+							if (red_y_pos + y_offset >=0 && red_y_pos + y_offset <= 87) {//bounds for making sure we're not searching outside the side of the brush
+								canvas.readRGBAatSpeicificPixel(red_x_pos, red_y_pos + y_offset);
+								if (canvas.compareRGBA(0, 0, 255, 255)) {
+									//This pixel is blue.
+									//This is bad
+									this_is_bad = true;
+								}
+							}
+						}
+					}
+				}
+
+				int tempy = brush_positions[char_num] + splat_offset;
+				if (tempy < 0) tempy = 0;
+
+				canvas.insertImage(brush, tempy, 0, false);
+				brush_positions.push_back(brush_positions[char_num] + character_width + 5);
+
+			}
+			//END Create Image
+

@@ -1,0 +1,16 @@
+<FontConfig
+	name = "Noita Font"
+	characters_per_row = "26"
+	allowed_characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890+-()/?,._ &quot;&apos;"
+	>
+
+	<Character_Position_Componenent
+		character = "A"
+		pos_x = "1"
+		pos_y = "1"
+		delta_x = "40"
+		delta_y = "87"
+	></Character_Position_Componenent>
+
+</FontConfig>
+

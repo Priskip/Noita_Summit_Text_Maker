@@ -1,0 +1,304 @@
+// Our state
+	bool show_demo_window = false;
+	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+	static char streamer_name[256] = "";
+	std::string character_list = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890+-()/?,.\"\'_";
+	std::vector<std::string> streamer_list;
+	bool two_player_left = false;
+	bool two_player_right = false;
+	bool just_name = false;
+	int char_position = 0;
+
+	//Filter Inputs to only characters allowed
+	struct TextFilters
+	{
+		static int FilterImGuiLetters(ImGuiInputTextCallbackData* data)
+		{
+			if (data->EventChar < 256 && strchr("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890 +-()/?,.\"\'_", (char)data->EventChar))
+				return 0;
+			return 1;
+		}
+	};
+
+	//Read Config.xml
+	static int two_player_left_image_pos_x = 0;
+	static int two_player_left_image_pos_y = 0;
+	static int two_player_right_image_pos_x = 0;
+	static int two_player_right_image_pos_y = 0;
+
+	tinyxml2::XMLDocument config;
+	config.LoadFile("files/config.xml");
+	tinyxml2::XMLElement* pRootElement = config.RootElement();
+
+	//std::cout << pRootElement->Name() << std::endl;
+	for (const tinyxml2::XMLAttribute* attribute = pRootElement->FirstAttribute(); attribute != nullptr; attribute = attribute->Next()) {
+		std::string parameter = attribute->Name();
+
+		if (parameter == "two_player_left_x") {
+			two_player_left_image_pos_x = decStringToUnsignedInt(attribute->Value());
+		}
+		if (parameter == "two_player_left_y") {
+			two_player_left_image_pos_y = decStringToUnsignedInt(attribute->Value());
+		}
+		if (parameter == "two_player_right_x") {
+			two_player_right_image_pos_x = decStringToUnsignedInt(attribute->Value());
+		}
+		if (parameter == "two_player_right_y") {
+			two_player_right_image_pos_y = decStringToUnsignedInt(attribute->Value());
+		}
+	}
+
+	// Main loop
+	bool done = false;
+	while (!done)
+	{
+		// Poll and handle messages (inputs, window resize, etc.)
+		// See the WndProc() function below for our to dispatch events to the Win32 backend.
+		MSG msg;
+		while (::PeekMessage(&msg, NULL, 0U, 0U, PM_REMOVE))
+		{
+			::TranslateMessage(&msg);
+			::DispatchMessage(&msg);
+			if (msg.message == WM_QUIT)
+				done = true;
+		}
+		if (done)
+			break;
+
+		// Start the Dear ImGui frame
+		ImGui_ImplDX12_NewFrame();
+		ImGui_ImplWin32_NewFrame();
+		ImGui::NewFrame();
+
+		// -------------------- PUT ALL UI CODE BETWEEN HERE AND NEXT ONE OF THESE COMMENTS -------------------- //
+		//Main Window
+		{
+			ImGui::Begin("Main");
+			//ImGui::Checkbox("Demo Window", &show_demo_window);
+
+			ImGui::Text("Enter a streamer's name to add them to the list or read the contents of streamers.txt");
+			ImGui::Text("Allowed Characters: \"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890 +-()/?,.\"\'_\"");
+			ImGui::InputText("Streamer Name", streamer_name, 256, ImGuiInputTextFlags_CallbackCharFilter, TextFilters::FilterImGuiLetters);
+
+			if (ImGui::Button("Add to list")) {
+				int table_pos = getVectorPosition(streamer_list, streamer_name); //returns -1 if element does not exist in vector 
+				if (table_pos == -1) {
+					streamer_list.push_back(streamer_name); //streamer is not in list, add it to list 
+				}
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Read streamers.txt")) {
+				//Open File
+				std::string line;
+				std::ifstream streamers_file;
+				streamers_file.open("files/streamers.txt");
+
+				//Read stuff from file.
+				if (streamers_file.is_open()) {
+					//Parse File
+					while (streamers_file) {
+						getline(streamers_file, line); //read next line
+
+						bool allowed = false;
+						for (int i = 0; i < line.size(); i++) {
+							for (int j = 0; j < character_list.size(); j++) {
+								if (line[i] == character_list[j]) {
+									allowed = true;
+									break;
+								}
+							}
+						}
+
+
+						int table_pos = getVectorPosition(streamer_list, line); //returns -1 if element does not exist in vector
+						if (table_pos == -1) {
+							streamer_list.push_back(line); //streamer is not in list, add it to list
+						}
+					}
+				}
+				else
+				{
+					std::cout << "Could not open streamers.txt" << std::endl;
+				}
+
+				//Close file
+				streamers_file.close();
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Clear list")) {
+				streamer_list.clear();
+			}
+
+			ImGui::SeparatorText("Streamer List");
+			if (ImGui::TreeNode("Streamers"))
+			{
+				ImGui::Text("Click streamer name to remove them from list.");
+				if (streamer_list.size() > 0) {
+					for (int i = 0; i < streamer_list.size(); i++) {
+						if (ImGui::Button(streamer_list[i].c_str())) {
+							streamer_list.erase(streamer_list.begin() + i);
+						}
+						if ((i + 1) % 5 != 0 && i != streamer_list.size() - 1) {
+							ImGui::SameLine();
+						}
+
+					}
+				}
+
+				ImGui::TreePop();
+			}
+
+			//Demo Window
+			if (show_demo_window) {
+				ImGui::ShowDemoWindow(&show_demo_window);
+			}
+
+			ImGui::SeparatorText("Image Generation");
+			ImGui::Text("Select which types of images to generate.");
+			ImGui::Checkbox("Just Name", &just_name);
+			ImGui::SameLine();
+			ImGui::Checkbox("2 Player Left", &two_player_left);
+			ImGui::SameLine();
+			ImGui::Checkbox("2 Player Right", &two_player_right);
+
+			ImGui::Text("");
+			ImGui::Text("Set the X and Y positions to have names placed into a 1920x1080 png.");
+			ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+			ImGui::InputInt("2 Player Left X pos", &two_player_left_image_pos_x);
+			ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+			ImGui::InputInt("2 Player Left Y pos", &two_player_left_image_pos_y);
+
+			ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+			ImGui::InputInt("2 Player Right X pos", &two_player_right_image_pos_x);
+			ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8);
+			ImGui::InputInt("2 Player Right Y pos", &two_player_right_image_pos_y);
+			if (ImGui::Button("Reload config.xml values")) {
+				tinyxml2::XMLDocument config;
+				config.LoadFile("files/config.xml");
+				tinyxml2::XMLElement* pRootElement = config.RootElement();
+
+				//std::cout << pRootElement->Name() << std::endl;
+				for (const tinyxml2::XMLAttribute* attribute = pRootElement->FirstAttribute(); attribute != nullptr; attribute = attribute->Next()) {
+					std::string parameter = attribute->Name();
+
+					if (parameter == "two_player_left_x") {
+						two_player_left_image_pos_x = decStringToUnsignedInt(attribute->Value());
+					}
+					if (parameter == "two_player_left_y") {
+						two_player_left_image_pos_y = decStringToUnsignedInt(attribute->Value());
+					}
+					if (parameter == "two_player_right_x") {
+						two_player_right_image_pos_x = decStringToUnsignedInt(attribute->Value());
+					}
+					if (parameter == "two_player_right_y") {
+						two_player_right_image_pos_y = decStringToUnsignedInt(attribute->Value());
+					}
+				}
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Save values to config.xml")) {
+				tinyxml2::XMLDocument config;
+				config.LoadFile("files/config.xml");
+				tinyxml2::XMLElement* pRootElement = config.RootElement();
+				pRootElement->SetAttribute("two_player_left_x", two_player_left_image_pos_x);
+				pRootElement->SetAttribute("two_player_left_y", two_player_left_image_pos_y);
+				pRootElement->SetAttribute("two_player_right_x", two_player_right_image_pos_x);
+				pRootElement->SetAttribute("two_player_right_y", two_player_right_image_pos_y);
+				config.SaveFile("files/config.xml");
+			}
+
+			ImGui::Text("");
+			if (ImGui::Button("Generate Images")) {
+				//If something is selected
+				if (just_name || two_player_left || two_player_right && streamer_list.size() > 0) {
+					for (int streamer_i = 0; streamer_i < streamer_list.size(); streamer_i++) {
+						int horizontal_pos = 0;
+						std::string name = streamer_list[streamer_i]; //casting to string to use string library tools
+						Image canvas(70 * name.length(), 87); //make an image to place all letters into
+
+						Image letter_pallete; //Loads the Noita font
+						letter_pallete.readImageIntoPixelData("files/images/font/font_main.png");
+
+						Image brush; //brush for writing into canvas
+						Image width_detection;
+
+						//std::cout << "Char      Green     Red     Width     Hor_Pos   " << std::endl;
+
+						for (int i = 0; i < name.size(); i++) {
+
+							int char_position = -1;
+							int green_pixel_pos = 0;
+							int red_pixel_pos = 0;
+
+							for (int j = 0; j < character_list.size(); j++) {
+								if (name[i] == character_list[j]) {
+									char_position = j;
+									break;
+								}
+							}
+							if (char_position != -1) {
+								brush = letter_pallete.getSubselectionOfImage(1 + 73 * char_position, 1, 71 + 73 * char_position, 88);
+								width_detection = letter_pallete.getSubselectionOfImage(1 + 73 * char_position, 0, 71 + 73 * char_position, 1);
+
+								for (int i = 0; i < 70; i++) {
+									width_detection.readRGBAatSpeicificPixel(i, 0);
+
+									if (width_detection.rgba[0] == 0 && width_detection.rgba[1] == 255 &&
+										width_detection.rgba[2] == 0 && width_detection.rgba[3] == 255) {
+										green_pixel_pos = i;
+									}
+
+									if (width_detection.rgba[0] == 255 && width_detection.rgba[1] == 0 &&
+										width_detection.rgba[2] == 0 && width_detection.rgba[3] == 255) {
+										red_pixel_pos = i;
+									}
+								}
+
+								//std::cout << name[i] << blankSpaces(9)
+								//	<< unsignedIntToDecString(green_pixel_pos, 3) << blankSpaces(7)
+								//	<< unsignedIntToDecString(red_pixel_pos, 3) << blankSpaces(7)
+								//	<< unsignedIntToDecString(red_pixel_pos - green_pixel_pos, 3) << blankSpaces(7)
+								//	<< unsignedIntToDecString(horizontal_pos, 3) << std::endl;
+
+								brush = brush.getSubselectionOfImage(green_pixel_pos, 1, red_pixel_pos, 87);
+								canvas.insertImage(brush, horizontal_pos, 0, true);
+
+								horizontal_pos = horizontal_pos + (red_pixel_pos - green_pixel_pos);
+							}
+							else
+							{
+								horizontal_pos = horizontal_pos + 20;
+							}
+
+						}
+						canvas = canvas.getSubselectionOfImage(0, 0, horizontal_pos + 1, 87);
+
+
+						//Write to file locations
+						std::replace(name.begin(), name.end(), '.', '_');
+						if (just_name) {
+							canvas.writePixelDataIntoImage("files/images/just_name/" + name + ".png");
+						}
+
+						if (two_player_left) {
+							Image big_picture(1920, 1080);
+							big_picture.insertImage(canvas, two_player_left_image_pos_x, two_player_left_image_pos_y, true);
+							big_picture.writePixelDataIntoImage("files/images/2_player_left/" + name + ".png");
+						}
+
+						if (two_player_right) {
+							Image big_picture(1920, 1080);
+							big_picture.insertImage(canvas, two_player_right_image_pos_x - canvas.width, two_player_right_image_pos_y, true);
+							big_picture.writePixelDataIntoImage("files/images/2_player_right/" + name + ".png");
+						}
+					}
+				}
+			}
+
+			ImGui::End();
+		}
+
+
+
+
+		// -------------------- PUT ALL UI CODE BETWEEN HERE AND THE PREVIOUS ONE OF THESE COMMENTS -------------------- //
