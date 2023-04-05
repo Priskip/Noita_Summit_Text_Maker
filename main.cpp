@@ -552,8 +552,14 @@ int main(int, char**)
 								//END Create Image
 
 								//"?" and "." can be messy with file names...
-								name_to_gen.replace(name_to_gen.begin(), name_to_gen.end(), '.', '__');
-								name_to_gen.replace(name_to_gen.begin(), name_to_gen.end(), '?', '___');
+								for (int i = 0; i < name_to_gen.length(); i++) {
+									if (name_to_gen[i] == '?') {
+										name_to_gen[i] = '-';
+									}
+									if (name_to_gen[i] == '.') {
+										name_to_gen[i] = '_';
+									}
+								}
 
 								if (basic) {
 									
