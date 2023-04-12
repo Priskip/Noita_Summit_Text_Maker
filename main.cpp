@@ -77,7 +77,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 
 // Main code
-int main(int, char**)
+int main(int argc, char** argv[])
 {
 	// Create application window
 	//ImGui_ImplWin32_EnableDpiAwareness();
