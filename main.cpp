@@ -577,7 +577,7 @@ int main(int argc, char** argv[])
 								}
 								if (two_player_right) {
 									Image big_canvas(1920, 1080);
-									big_canvas.insertImage(canvas_color, two_player_right_x, two_player_right_y, true);
+									big_canvas.insertImage(canvas_color, two_player_right_x - canvas_color.width, two_player_right_y, true);
 									big_canvas.writePixelDataIntoImage("files/images/2_players/right/" + name_to_gen + ".png");
 								}
 							
